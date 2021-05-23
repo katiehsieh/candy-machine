@@ -1,9 +1,12 @@
+from flask import Flask, request, Response
 from gpiozero.pins.pigpio import PiGPIOFactory
 from gpiozero import Button, Servo, LightSensor
 import board
 from digitalio import DigitalInOut
 import adafruit_character_lcd.character_lcd as characterlcd
 from time import sleep
+
+app = Flask(__name__)
 
 # GPIO pins
 button_pin = 26
@@ -21,7 +24,7 @@ button = Button(button_pin)
 
 # Initialize servo
 factory = PiGPIOFactory()
-servo = Servo(pin=servo_pin, initial_value=1, min_pulse_width=5/10000, max_pulse_width=25/10000, pin_factory=factory)
+servo = Servo(pin=servo_pin, initial_value=1, pin_factory=factory)
 
 # Initialize ldr
 ldr = LightSensor(ldr_pin)
@@ -33,18 +36,21 @@ lcd = characterlcd.Character_LCD_Mono(
     lcd_rs, lcd_en, lcd_d4, lcd_d5, lcd_d6, lcd_d7, lcd_columns, lcd_rows
 )
 
-# Variables
-normalMode = True
+# Global variables
+normal_mode = True
+count = 0
 
-# Function to display lcd message
+# Function to display lcd message (2nd line)
 def set_lcd(message):
     lcd.clear()
-    lcd.message = message
+    lcd.message = "Candy machine =)\n" + message
 
 # Function to dispense one candy
 def dispense():
-    lcd.clear()
-    set_lcd("Candy machine =)\nDispensing candy")
+    global normal_mode
+    global count
+
+    set_lcd("Dispensing candy")
 
     value = servo.value
     shift = 0.1
@@ -61,13 +67,18 @@ def dispense():
         value += shift
         sleep(0.1)
 
-    set_lcd("Candy machine =)")
+    if normal_mode:
+        set_lcd("")
+    else:
+        set_lcd("Count: " + str(count))
 
 # Function to reset servo position
 def reset():
-    lcd.clear()
+    set_lcd("")
+
     value = servo.value
     shift = 0.1
+
     while value < 1:
         servo.value = value
         value += shift
@@ -75,23 +86,46 @@ def reset():
 
 # Function when ldr is activated
 def ldr_activate():
-    global normalMode
-    if normalMode:
+    global normal_mode
+    global count
+
+    if normal_mode:
+        dispense()
+    elif count > 0:
+        count -= 1
         dispense()
 
 # Function to switch mode
 def switch_mode():
-    global normalMode
-    normalMode = not normalMode
-    if normalMode:
-        set_lcd("Candy machine =)\nMode: normal")
-        sleep(1)
-        set_lcd("Candy machine =)")
-    else:
-        set_lcd("Candy machine =)\nMode: app")
-        sleep(1)
-        set_lcd("Candy machine =)")
+    global normal_mode
+    global count
 
-set_lcd("Candy machine =)")
+    normal_mode = not normal_mode
+
+    if normal_mode:
+        set_lcd("Mode: normal")
+        sleep(1)
+        set_lcd("")
+    else:
+        set_lcd("Mode: app")
+        sleep(1)
+        set_lcd("Count: " + str(count))
+
+# Run
+reset()
 button.when_pressed = switch_mode
 ldr.when_dark = ldr_activate
+
+# Webhook
+@app.route('/webhook', methods=['POST'])
+def respond():
+    global count
+
+    if request.json['event_name'] == 'item:completed':
+        count += 1
+    elif request.json['event_name'] == 'item:uncompleted':
+        count -= 1
+
+    set_lcd("Count: " + str(count))
+
+    return Response(status=200)
