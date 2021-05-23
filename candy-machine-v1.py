@@ -1,5 +1,5 @@
 from gpiozero.pins.pigpio import PiGPIOFactory
-from gpiozero import Servo, LightSensor
+from gpiozero import Servo, LineSensor
 import board
 from digitalio import DigitalInOut
 import adafruit_character_lcd.character_lcd as characterlcd
@@ -7,7 +7,7 @@ from time import sleep
 
 # GPIO pins
 servo_pin = 16
-ldr_pin = 27
+ir_pin = 27
 lcd_rs = DigitalInOut(board.D25)
 lcd_en = DigitalInOut(board.D24)
 lcd_d7 = DigitalInOut(board.D22)
@@ -19,8 +19,8 @@ lcd_d4 = DigitalInOut(board.D23)
 factory = PiGPIOFactory()
 servo = Servo(pin=servo_pin, initial_value=1, min_pulse_width=5/10000, max_pulse_width=25/10000, pin_factory=factory)
 
-# Initialize ldr
-ldr = LightSensor(ldr_pin)
+# Initialize ir
+ir = LineSensor(ir_pin)
 
 # Initialize lcd
 lcd_columns = 16
@@ -65,9 +65,9 @@ def reset():
 # Main loop
 try:
     while True:
-        ldr.wait_for_dark()
+        ir.wait_for_line()
         dispense()
-        ldr.wait_for_light()
+        ir.wait_for_no_line()
 
 except KeyboardInterrupt:
     print("done")

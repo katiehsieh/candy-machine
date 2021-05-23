@@ -1,6 +1,6 @@
 from flask import Flask, request, Response
 from gpiozero.pins.pigpio import PiGPIOFactory
-from gpiozero import Button, Servo, LightSensor
+from gpiozero import Button, Servo, LineSensor
 import board
 from digitalio import DigitalInOut
 import adafruit_character_lcd.character_lcd as characterlcd
@@ -11,7 +11,7 @@ app = Flask(__name__)
 # GPIO pins
 button_pin = 26
 servo_pin = 16
-ldr_pin = 27
+ir_pin = 27
 lcd_rs = DigitalInOut(board.D25)
 lcd_en = DigitalInOut(board.D24)
 lcd_d7 = DigitalInOut(board.D22)
@@ -26,8 +26,8 @@ button = Button(button_pin)
 factory = PiGPIOFactory()
 servo = Servo(pin=servo_pin, initial_value=1, pin_factory=factory)
 
-# Initialize ldr
-ldr = LightSensor(ldr_pin)
+# Initialize ir
+ir = LineSensor(ir_pin)
 
 # Initialize lcd
 lcd_columns = 16
@@ -84,8 +84,8 @@ def reset():
         value += shift
         sleep(0.1)
 
-# Function when ldr is activated
-def ldr_activate():
+# Function when ir is activated
+def activate():
     global normal_mode
     global count
 
@@ -114,7 +114,7 @@ def switch_mode():
 # Run
 reset()
 button.when_pressed = switch_mode
-ldr.when_dark = ldr_activate
+ir.when_line = activate
 
 # Webhook
 @app.route('/webhook', methods=['POST'])
@@ -126,6 +126,7 @@ def respond():
     elif request.json['event_name'] == 'item:uncompleted':
         count -= 1
 
-    set_lcd("Count: " + str(count))
+    if not normal_mode:
+        set_lcd("Count: " + str(count))
 
     return Response(status=200)
